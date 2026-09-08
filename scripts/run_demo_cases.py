@@ -94,14 +94,17 @@ def setup_dirs():
 
 def tamper_image_pixels(path: Path, out_path: Path, corner="bottom-right", n=6):
     img = Image.open(path)
-    img.load()
     px = img.load()
+    assert px is not None
     w, h = img.size
     for dx in range(n):
         for dy in range(n):
             x, y = (w - 1 - dx, h - 1 - dy) if corner == "bottom-right" else (dx, dy)
             pixel = px[x, y]
-            px[x, y] = tuple(255 - c for c in pixel[:3]) + tuple(pixel[3:])
+            if isinstance(pixel, (int, float)):
+                px[x, y] = int(255 - pixel)
+            else:
+                px[x, y] = tuple(255 - c for c in pixel[:3]) + tuple(pixel[3:])
     img.save(out_path)
 
 
