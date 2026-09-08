@@ -1,0 +1,292 @@
+[
+  {
+    "case_id": "IMG-CAP-01",
+    "cover_type": "image",
+    "category": "capacity-check",
+    "description": "Cover capacity=114574B at 1 LSB, message=119574B",
+    "verdict": "Rejected: Payload larger than cover object capacity",
+    "expected": "Rejected: Payload larger than cover object capacity",
+    "pass": true,
+    "extra": {}
+  },
+  {
+    "case_id": "IMG-POS-01",
+    "cover_type": "image",
+    "category": "positive",
+    "description": "Short message (learning objective), LSB=1",
+    "verdict": "Authentic",
+    "expected": "Authentic",
+    "pass": true,
+    "extra": {}
+  },
+  {
+    "case_id": "IMG-POS-02",
+    "cover_type": "image",
+    "category": "positive-send-receive",
+    "description": "Large message (project overview), LSB=4, sent A->B then verified by B",
+    "verdict": "Authentic",
+    "expected": "Authentic",
+    "pass": true,
+    "extra": {}
+  },
+  {
+    "case_id": "IMG-POS-03",
+    "cover_type": "image",
+    "category": "positive",
+    "description": "Custom confidential payload, LSB=8",
+    "verdict": "Authentic",
+    "expected": "Authentic",
+    "pass": true,
+    "extra": {}
+  },
+  {
+    "case_id": "IMG-NEG-01",
+    "cover_type": "image",
+    "category": "negative",
+    "description": "Cover pixels tampered after signing",
+    "verdict": "Tampered",
+    "expected": "Tampered",
+    "pass": true,
+    "extra": {}
+  },
+  {
+    "case_id": "IMG-NEG-02",
+    "cover_type": "image",
+    "category": "negative",
+    "description": "Verifier supplies the wrong shared secret key",
+    "verdict": "Cannot Verify",
+    "expected": "Cannot Verify",
+    "pass": true,
+    "extra": {}
+  },
+  {
+    "case_id": "IMG-NEG-03",
+    "cover_type": "image",
+    "category": "negative",
+    "description": "File signed with an untrusted private key",
+    "verdict": "Signature Invalid",
+    "expected": "Signature Invalid",
+    "pass": true,
+    "extra": {}
+  },
+  {
+    "case_id": "IMG-NEG-04",
+    "cover_type": "image",
+    "category": "negative",
+    "description": "Original cover object with no embedded payload",
+    "verdict": "Payload Missing",
+    "expected": "Payload Missing",
+    "pass": true,
+    "extra": {}
+  },
+  {
+    "case_id": "IMG-NEG-05",
+    "cover_type": "image",
+    "category": "negative",
+    "description": "Header engineered to advertise an out-of-range start offset",
+    "verdict": "Wrong Start Location",
+    "expected": "Wrong Start Location",
+    "pass": true,
+    "extra": {}
+  },
+  {
+    "case_id": "IMG-LSB-1",
+    "cover_type": "image",
+    "category": "lsb-matrix",
+    "description": "Selectable LSB depth = 1",
+    "verdict": "Authentic",
+    "expected": "Authentic",
+    "pass": true,
+    "extra": {}
+  },
+  {
+    "case_id": "IMG-LSB-2",
+    "cover_type": "image",
+    "category": "lsb-matrix",
+    "description": "Selectable LSB depth = 2",
+    "verdict": "Authentic",
+    "expected": "Authentic",
+    "pass": true,
+    "extra": {}
+  },
+  {
+    "case_id": "IMG-LSB-3",
+    "cover_type": "image",
+    "category": "lsb-matrix",
+    "description": "Selectable LSB depth = 3",
+    "verdict": "Authentic",
+    "expected": "Authentic",
+    "pass": true,
+    "extra": {}
+  },
+  {
+    "case_id": "IMG-LSB-4",
+    "cover_type": "image",
+    "category": "lsb-matrix",
+    "description": "Selectable LSB depth = 4",
+    "verdict": "Authentic",
+    "expected": "Authentic",
+    "pass": true,
+    "extra": {}
+  },
+  {
+    "case_id": "IMG-LSB-5",
+    "cover_type": "image",
+    "category": "lsb-matrix",
+    "description": "Selectable LSB depth = 5",
+    "verdict": "Authentic",
+    "expected": "Authentic",
+    "pass": true,
+    "extra": {}
+  },
+  {
+    "case_id": "IMG-LSB-6",
+    "cover_type": "image",
+    "category": "lsb-matrix",
+    "description": "Selectable LSB depth = 6",
+    "verdict": "Authentic",
+    "expected": "Authentic",
+    "pass": true,
+    "extra": {}
+  },
+  {
+    "case_id": "IMG-LSB-7",
+    "cover_type": "image",
+    "category": "lsb-matrix",
+    "description": "Selectable LSB depth = 7",
+    "verdict": "Authentic",
+    "expected": "Authentic",
+    "pass": true,
+    "extra": {}
+  },
+  {
+    "case_id": "IMG-LSB-8",
+    "cover_type": "image",
+    "category": "lsb-matrix",
+    "description": "Selectable LSB depth = 8",
+    "verdict": "Authentic",
+    "expected": "Authentic",
+    "pass": true,
+    "extra": {}
+  },
+  {
+    "case_id": "AUD-CAP-01",
+    "cover_type": "audio",
+    "category": "capacity-check",
+    "description": "Cover capacity=26936B at 1 LSB, message=31936B",
+    "verdict": "Rejected: Payload larger than cover object capacity",
+    "expected": "Rejected: Payload larger than cover object capacity",
+    "pass": true,
+    "extra": {}
+  },
+  {
+    "case_id": "AUD-POS-01",
+    "cover_type": "audio",
+    "category": "positive",
+    "description": "Short message (learning objective), LSB=2",
+    "verdict": "Authentic",
+    "expected": "Authentic",
+    "pass": true,
+    "extra": {}
+  },
+  {
+    "case_id": "AUD-POS-02",
+    "cover_type": "audio",
+    "category": "positive-send-receive",
+    "description": "Large message (project overview), LSB=5, sent A->B then verified by B",
+    "verdict": "Authentic",
+    "expected": "Authentic",
+    "pass": true,
+    "extra": {}
+  },
+  {
+    "case_id": "AUD-POS-03",
+    "cover_type": "audio",
+    "category": "positive",
+    "description": "Custom confidential payload, LSB=8",
+    "verdict": "Authentic",
+    "expected": "Authentic",
+    "pass": true,
+    "extra": {}
+  },
+  {
+    "case_id": "AUD-NEG-01",
+    "cover_type": "audio",
+    "category": "negative",
+    "description": "Cover samples tampered after signing",
+    "verdict": "Tampered",
+    "expected": "Tampered",
+    "pass": true,
+    "extra": {}
+  },
+  {
+    "case_id": "AUD-NEG-02",
+    "cover_type": "audio",
+    "category": "negative",
+    "description": "Verifier supplies the wrong shared secret key",
+    "verdict": "Cannot Verify",
+    "expected": "Cannot Verify",
+    "pass": true,
+    "extra": {}
+  },
+  {
+    "case_id": "AUD-NEG-03",
+    "cover_type": "audio",
+    "category": "negative",
+    "description": "File signed with an untrusted private key",
+    "verdict": "Signature Invalid",
+    "expected": "Signature Invalid",
+    "pass": true,
+    "extra": {}
+  },
+  {
+    "case_id": "AUD-NEG-04",
+    "cover_type": "audio",
+    "category": "negative",
+    "description": "Original cover object with no embedded payload",
+    "verdict": "Payload Missing",
+    "expected": "Payload Missing",
+    "pass": true,
+    "extra": {}
+  },
+  {
+    "case_id": "AUD-LSB-1",
+    "cover_type": "audio",
+    "category": "lsb-matrix",
+    "description": "Selectable LSB depth = 1",
+    "verdict": "Authentic",
+    "expected": "Authentic",
+    "pass": true,
+    "extra": {}
+  },
+  {
+    "case_id": "AUD-LSB-3",
+    "cover_type": "audio",
+    "category": "lsb-matrix",
+    "description": "Selectable LSB depth = 3",
+    "verdict": "Authentic",
+    "expected": "Authentic",
+    "pass": true,
+    "extra": {}
+  },
+  {
+    "case_id": "AUD-LSB-6",
+    "cover_type": "audio",
+    "category": "lsb-matrix",
+    "description": "Selectable LSB depth = 6",
+    "verdict": "Authentic",
+    "expected": "Authentic",
+    "pass": true,
+    "extra": {}
+  },
+  {
+    "case_id": "AUD-LSB-8",
+    "cover_type": "audio",
+    "category": "lsb-matrix",
+    "description": "Selectable LSB depth = 8",
+    "verdict": "Authentic",
+    "expected": "Authentic",
+    "pass": true,
+    "extra": {}
+  }
+]
