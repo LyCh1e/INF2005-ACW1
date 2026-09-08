@@ -3,42 +3,51 @@ gui_app.py
 ----------
 Tkinter GUI for the INF2005 ACW1 steganographic verification tool.
 
-Two tabs (Image / Audio), each with:
-  - Protect  : pick a cover file, a message, LSB depth (1-8), a shared
-               secret key -> produces a signed stego file; shows a
-               before/after comparison and a capacity check.
-  - Verify   : pick a (possibly tampered) stego file, a secret key and a
-               public key -> shows the verdict + full payload details.
-  - Simulate tamper : flips a few bytes in a stego file, well away from
-               the hidden data, to produce a negative test case quickly.
+Layout: a window with two tabs, "Image" and "Audio".  Both tabs share the
+same three sections (built once in `CoverTab`); each tab only plugs in the
+format-specific embed / verify / preview / tamper functions.
+
+Sections on every tab:
+  1) Protect  - choose a cover file, type/pick a message, choose the LSB
+                depth (1-8) and the shared secret key, run a capacity check,
+                then embed + sign.  Shows the cover BEFORE encoding and a
+                cover-vs-stego comparison AFTER encoding.
+  2) Verify   - choose a (possibly tampered) stego file + keys, get a
+                verdict, the recovered payload, and a preview of the stego
+                object plus the recovered hidden message (AFTER decoding).
+  3) Simulate tamper - flip a few bytes far from the hidden data to make a
+                negative test case in one click.
 
 Run:  python src/gui_app.py
 """
 
 from __future__ import annotations
 
-import io
 import json
 import sys
 import wave
 from pathlib import Path
 from tkinter import (
-    BOTH, END, LEFT, RIGHT, TOP, X, Y, StringVar, IntVar, Text, Tk, ttk, filedialog, messagebox,
+    BOTH, END, LEFT, X, StringVar, IntVar, Text, Tk, ttk, filedialog, messagebox,
 )
 
+# Make `src/` importable whether the script is run from the repo root or from src/.
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import crypto_utils  # noqa: E402
 import image_stego  # noqa: E402
 import audio_stego  # noqa: E402
+import payload as payload_mod  # noqa: E402
 
 from PIL import Image, ImageTk  # noqa: E402
 
 DEFAULT_PRIVATE_KEY = ROOT / "keys" / "private_key.pem"
 DEFAULT_PUBLIC_KEY = ROOT / "keys" / "public_key.pem"
-DEFAULT_TEAM_ID = "Px-x"
+DEFAULT_TEAM_ID = payload_mod.TEAM_ID_DEFAULT
 
+# The two canned messages the assignment asks for ("various payload sizes"):
+# a short one (a Learning Outcome) and a large one (the Project Overview).
 LEARNING_OBJ_SHORT = (
     "Use digital signatures to verify that a payload or file record was issued by a "
     "legitimate signer and has not been altered."
@@ -56,59 +65,72 @@ PROJECT_OVERVIEW_LARGE = (
 
 
 def ensure_keys_exist():
+    """Generate the demo RSA key pair on first run if it is missing."""
     if not DEFAULT_PRIVATE_KEY.exists() or not DEFAULT_PUBLIC_KEY.exists():
         crypto_utils.generate_keypair(DEFAULT_PRIVATE_KEY, DEFAULT_PUBLIC_KEY)
 
 
 class CoverTab(ttk.Frame):
-    """Shared UI/logic for the Image and Audio tabs; subclasses provide the
-    format-specific embed/extract/preview/tamper functions."""
+    """Shared UI and logic for the Image and Audio tabs.
+
+    Subclasses set `cover_type` / `file_types` and implement the four hooks
+    at the bottom (`capacity_report`, `embed`, `extract_and_verify`,
+    `tamper`) plus the optional preview hooks.
+    """
 
     cover_type: str = "override-me"
     file_types: list[tuple[str, str]] = []
 
     def __init__(self, parent):
         super().__init__(parent, padding=10)
-        self.cover_path = StringVar()
-        self.stego_path = StringVar()
-        self.verify_path = StringVar()
+
+        # --- Tk variables bound to the input widgets ---
+        self.cover_path = StringVar()      # cover file chosen in section 1
+        self.stego_path = StringVar()      # stego file produced by Protect
+        self.verify_path = StringVar()     # file chosen in section 2
         self.secret_key = StringVar(value="team-shared-secret-demo-key")
         self.lsb_depth = IntVar(value=2)
-        self.message_choice = StringVar(value="custom")
-        self.custom_message = StringVar(value="Custom confidential note from Team Px-x.")
+        self.message_choice = StringVar(value="custom")  # short / large / custom
+        self.custom_message = StringVar(value=f"Custom confidential note from Team {DEFAULT_TEAM_ID}.")
         self.team_id = StringVar(value=DEFAULT_TEAM_ID)
 
+        # --- Build the three sections, separated by horizontal rules ---
         self._build_protect_section()
         ttk.Separator(self, orient="horizontal").pack(fill=X, pady=8)
         self._build_verify_section()
         ttk.Separator(self, orient="horizontal").pack(fill=X, pady=8)
         self._build_tamper_section()
 
-    # ---- UI construction -------------------------------------------------
+    # ==== UI construction ==============================================
     def _build_protect_section(self):
+        """Section 1: pick a cover, a message, options; capacity check + Protect."""
         box = ttk.LabelFrame(self, text=f"1) Protect a {self.cover_type} file", padding=8)
         box.pack(fill=X)
 
+        # Row: choose cover file.
         row = ttk.Frame(box)
         row.pack(fill=X, pady=2)
         ttk.Button(row, text="Choose cover file...", command=self._choose_cover).pack(side=LEFT)
         ttk.Entry(row, textvariable=self.cover_path, width=60).pack(side=LEFT, padx=6)
 
+        # Row: which message to embed.
         msg_row = ttk.Frame(box)
         msg_row.pack(fill=X, pady=4)
         ttk.Label(msg_row, text="Payload message:").pack(side=LEFT)
         ttk.Radiobutton(msg_row, text="Short (learning objective)", variable=self.message_choice,
-                         value="short").pack(side=LEFT, padx=4)
+                        value="short").pack(side=LEFT, padx=4)
         ttk.Radiobutton(msg_row, text="Large (project overview)", variable=self.message_choice,
-                         value="large").pack(side=LEFT, padx=4)
+                        value="large").pack(side=LEFT, padx=4)
         ttk.Radiobutton(msg_row, text="Custom", variable=self.message_choice,
-                         value="custom").pack(side=LEFT, padx=4)
+                        value="custom").pack(side=LEFT, padx=4)
 
+        # Free-text box used when "Custom" is selected.
         ttk.Label(box, text="Custom message text:").pack(anchor="w")
         self.custom_text = Text(box, height=3, width=80)
         self.custom_text.insert("1.0", self.custom_message.get())
         self.custom_text.pack(fill=X, pady=2)
 
+        # Row: LSB depth spinbox (FR: selectable 1-8), secret key, team id.
         opts_row = ttk.Frame(box)
         opts_row.pack(fill=X, pady=4)
         ttk.Label(opts_row, text="LSBs to use (1-8):").pack(side=LEFT)
@@ -118,18 +140,20 @@ class CoverTab(ttk.Frame):
         ttk.Label(opts_row, text="Team ID:").pack(side=LEFT, padx=(16, 0))
         ttk.Entry(opts_row, textvariable=self.team_id, width=10).pack(side=LEFT, padx=4)
 
+        # Row: action buttons.
         btn_row = ttk.Frame(box)
         btn_row.pack(fill=X, pady=4)
         ttk.Button(btn_row, text="Check capacity", command=self._check_capacity).pack(side=LEFT)
         ttk.Button(btn_row, text="Protect (embed + sign)", command=self._do_protect).pack(side=LEFT, padx=6)
 
+        # Text log + preview strip for this section.
         self.protect_output = Text(box, height=8, width=100)
         self.protect_output.pack(fill=BOTH, expand=True, pady=4)
-
-        self.preview_frame = ttk.Frame(box)
+        self.preview_frame = ttk.Frame(box)   # holds "before" / "before vs after" thumbnails
         self.preview_frame.pack(fill=X, pady=4)
 
     def _build_verify_section(self):
+        """Section 2: pick a file + secret key, Verify, show verdict + preview."""
         box = ttk.LabelFrame(self, text=f"2) Verify a {self.cover_type} file", padding=8)
         box.pack(fill=X)
 
@@ -147,7 +171,13 @@ class CoverTab(ttk.Frame):
         self.verify_output = Text(box, height=10, width=100)
         self.verify_output.pack(fill=BOTH, expand=True, pady=4)
 
+        # Preview strip for the DECODE side: the stego object + the recovered
+        # hidden message (spec: compare/"play" cover and stego after decoding).
+        self.verify_preview_frame = ttk.Frame(box)
+        self.verify_preview_frame.pack(fill=X, pady=4)
+
     def _build_tamper_section(self):
+        """Section 3: one-click helper to produce a tampered negative case."""
         box = ttk.LabelFrame(self, text="3) Simulate tampering (negative test helper)", padding=8)
         box.pack(fill=X)
         row = ttk.Frame(box)
@@ -155,11 +185,14 @@ class CoverTab(ttk.Frame):
         ttk.Button(row, text="Tamper a protected file...", command=self._do_tamper).pack(side=LEFT)
         ttk.Label(row, text="(flips a few bytes far away from the hidden data region)").pack(side=LEFT, padx=8)
 
-    # ---- helpers -----------------------------------------------------
+    # ==== Small helpers ================================================
     def _choose_cover(self):
+        """File dialog for the cover file; also shows a 'before encoding' preview."""
         path = filedialog.askopenfilename(title="Choose cover file", filetypes=self.file_types)
         if path:
             self.cover_path.set(path)
+            self._clear_frame(self.preview_frame)
+            self._show_cover_preview(path)  # per-format hook
 
     def _choose_verify(self):
         path = filedialog.askopenfilename(title="Choose file to verify", filetypes=self.file_types)
@@ -167,6 +200,7 @@ class CoverTab(ttk.Frame):
             self.verify_path.set(path)
 
     def _get_message(self) -> str:
+        """Resolve the selected radio button to the actual message text."""
         choice = self.message_choice.get()
         if choice == "short":
             return LEARNING_OBJ_SHORT
@@ -179,14 +213,21 @@ class CoverTab(ttk.Frame):
             widget.delete("1.0", END)
         widget.insert(END, text)
 
-    # ---- actions (implemented via subclass hooks) ---------------------
+    @staticmethod
+    def _clear_frame(frame: ttk.Frame):
+        for child in frame.winfo_children():
+            child.destroy()
+
+    # ==== Button actions ==============================================
     def _check_capacity(self):
+        """Mandatory 'is the payload bigger than the cover?' check."""
         path = self.cover_path.get()
         if not path:
             messagebox.showwarning("No file", "Choose a cover file first.")
             return
         try:
-            report = self.capacity_report(path, self.lsb_depth.get())
+            # team_id is threaded through: a longer id shrinks the message room.
+            report = self.capacity_report(path, self.lsb_depth.get(), self.team_id.get())
             message = self._get_message()
             msg_bytes = len(message.encode("utf-8"))
             ok = msg_bytes <= report["max_message_bytes"]
@@ -202,6 +243,8 @@ class CoverTab(ttk.Frame):
             messagebox.showerror("Capacity check failed", str(exc))
 
     def _do_protect(self):
+        """Embed + sign: writes a stego file next to the originals and shows
+        a cover-vs-stego comparison."""
         cover = self.cover_path.get()
         if not cover:
             messagebox.showwarning("No file", "Choose a cover file first.")
@@ -213,6 +256,7 @@ class CoverTab(ttk.Frame):
             secret_key = self.secret_key.get().encode("utf-8")
             lsb = self.lsb_depth.get()
             src = Path(cover)
+
             out_dir = ROOT / "samples" / "protected"
             out_dir.mkdir(parents=True, exist_ok=True)
             out_path = out_dir / f"{src.stem}_stego{src.suffix}"
@@ -222,6 +266,7 @@ class CoverTab(ttk.Frame):
                 message=message, lsb_depth=lsb, media_id=f"{src.stem}-{self.cover_type}",
                 team_id=self.team_id.get(),
             )
+            # Point the Verify section at the file we just made.
             self.stego_path.set(str(out_path))
             self.verify_path.set(str(out_path))
 
@@ -235,11 +280,17 @@ class CoverTab(ttk.Frame):
                 json.dumps(stats["payload"], indent=2),
             ]
             self._log(self.protect_output, "\n".join(lines))
-            self._show_preview(cover, str(out_path))
+
+            # AFTER encoding: show original vs stego for comparison.
+            self._clear_frame(self.preview_frame)
+            self._show_pair_preview(self.preview_frame, cover, str(out_path),
+                                    labels=("Original (before)", "Stego (after encoding)"))
         except Exception as exc:
             messagebox.showerror("Protect failed", str(exc))
 
     def _do_verify(self):
+        """Extract + verify: shows the verdict, the recovered payload, and a
+        preview of the stego object plus the recovered hidden message."""
         path = self.verify_path.get()
         if not path:
             messagebox.showwarning("No file", "Choose a file to verify first.")
@@ -248,6 +299,7 @@ class CoverTab(ttk.Frame):
             public_key = crypto_utils.load_public_key(DEFAULT_PUBLIC_KEY)
             secret_key = self.secret_key.get().encode("utf-8")
             result = self.extract_and_verify(path, secret_key=secret_key, public_key=public_key)
+
             lines = [
                 f"File: {path}",
                 f"VERDICT: {result['verdict']}",
@@ -260,27 +312,50 @@ class CoverTab(ttk.Frame):
                 lines.append("Extracted payload:")
                 lines.append(json.dumps(result["payload"], indent=2))
             self._log(self.verify_output, "\n".join(lines))
+
+            # AFTER decoding: preview the stego object and "play"/show the
+            # recovered hidden message.
+            self._clear_frame(self.verify_preview_frame)
+            self._show_verify_preview(path, result)
         except Exception as exc:
             messagebox.showerror("Verify failed", str(exc))
 
     def _do_tamper(self):
+        """Make a tampered copy of a protected file for a negative test."""
         path = filedialog.askopenfilename(title="Choose a protected file to tamper", filetypes=self.file_types)
         if not path:
             return
         try:
             out_path = self.tamper(path)
             self.verify_path.set(out_path)
-            messagebox.showinfo("Tampered file created", f"Wrote tampered copy:\n{out_path}\n\n"
-                                                            "Now click Verify to see the negative case.")
+            messagebox.showinfo("Tampered file created",
+                                f"Wrote tampered copy:\n{out_path}\n\nNow click Verify to see the negative case.")
         except Exception as exc:
             messagebox.showerror("Tamper failed", str(exc))
 
-    def _show_preview(self, before_path: str, after_path: str):
-        for child in self.preview_frame.winfo_children():
-            child.destroy()
+    # ==== Preview helpers (shared) ====================================
+    def _show_recovered_message(self, frame: ttk.Frame, result: dict):
+        """Render the recovered hidden message ('play/execute the payload' for
+        a text payload) below whatever media preview the subclass drew."""
+        payload = result.get("payload") or {}
+        msg = payload.get("message")
+        box = ttk.LabelFrame(frame, text="Recovered hidden message (payload)", padding=6)
+        box.pack(fill=X, pady=4)
+        text = Text(box, height=4, width=100, wrap="word")
+        text.insert("1.0", msg if msg else "(no payload recovered - see verdict above)")
+        text.configure(state="disabled")
+        text.pack(fill=X)
 
-    # ---- to be overridden ----------------------------------------------
-    def capacity_report(self, path, lsb_depth):
+    def _show_pair_preview(self, frame: ttk.Frame, left_path: str, right_path: str, labels):
+        """Default 'two things side by side' preview - subclasses override
+        with real thumbnails / audio players."""
+        for label_text, p in zip(labels, (left_path, right_path)):
+            col = ttk.Frame(frame)
+            col.pack(side=LEFT, padx=8)
+            ttk.Label(col, text=f"{label_text}\n{Path(p).name}").pack()
+
+    # ==== Hooks for subclasses =======================================
+    def capacity_report(self, path, lsb_depth, team_id):
         raise NotImplementedError
 
     def embed(self, *args, **kwargs):
@@ -292,13 +367,20 @@ class CoverTab(ttk.Frame):
     def tamper(self, path: str) -> str:
         raise NotImplementedError
 
+    def _show_cover_preview(self, path: str):
+        """'Before encoding' preview - default no-op."""
+
+    def _show_verify_preview(self, stego_path: str, result: dict):
+        """'After decoding' preview - default: just show the recovered message."""
+        self._show_recovered_message(self.verify_preview_frame, result)
+
 
 class ImageTab(CoverTab):
     cover_type = "image"
     file_types = [("PNG images", "*.png"), ("All files", "*.*")]
 
-    def capacity_report(self, path, lsb_depth):
-        return image_stego.capacity_report(path, lsb_depth)
+    def capacity_report(self, path, lsb_depth, team_id):
+        return image_stego.capacity_report(path, lsb_depth, team_id)
 
     def embed(self, *args, **kwargs):
         return image_stego.embed_image(*args, **kwargs)
@@ -307,12 +389,13 @@ class ImageTab(CoverTab):
         return image_stego.extract_and_verify_image(*args, **kwargs)
 
     def tamper(self, path: str) -> str:
+        """Invert a 5x5 block of pixels in the bottom-right corner - far from
+        the header margin and (for a normal demo file) the payload region -
+        so the change is caught by the cover hash, not the signature."""
         img = Image.open(path)
         img.load()
         px = img.load()
         w, h = img.size
-        # flip a handful of pixels in the bottom-right corner, far from the
-        # header margin/derived payload region for a typical demo file.
         for dx in range(5):
             for dy in range(5):
                 x, y = w - 1 - dx, h - 1 - dy
@@ -323,29 +406,45 @@ class ImageTab(CoverTab):
         img.save(out_path)
         return out_path
 
-    def _show_preview(self, before_path: str, after_path: str):
-        super()._show_preview(before_path, after_path)
+    # ---- previews ----------------------------------------------------
+    def _thumb(self, parent, label_text: str, path: str):
+        """One labelled thumbnail column."""
+        col = ttk.Frame(parent)
+        col.pack(side=LEFT, padx=8)
+        ttk.Label(col, text=label_text).pack()
         try:
-            for label_text, p in (("Original", before_path), ("Stego", after_path)):
-                col = ttk.Frame(self.preview_frame)
-                col.pack(side=LEFT, padx=8)
-                ttk.Label(col, text=label_text).pack()
-                img = Image.open(p)
-                img.thumbnail((220, 220))
-                photo = ImageTk.PhotoImage(img)
-                lbl = ttk.Label(col, image=photo)
-                lbl.image = photo  # keep reference
-                lbl.pack()
-        except Exception:
-            pass  # preview is a convenience only
+            img = Image.open(path)
+            img.thumbnail((220, 220))
+            photo = ImageTk.PhotoImage(img)
+            lbl = ttk.Label(col, image=photo)
+            lbl.image = photo  # keep a reference or Tk garbage-collects it
+            lbl.pack()
+        except Exception as exc:
+            ttk.Label(col, text=f"(preview failed: {exc})").pack()
+
+    def _show_cover_preview(self, path: str):
+        self._thumb(self.preview_frame, "Cover (before encoding)", path)
+
+    def _show_pair_preview(self, frame, left_path, right_path, labels):
+        self._thumb(frame, labels[0], left_path)
+        self._thumb(frame, labels[1], right_path)
+
+    def _show_verify_preview(self, stego_path: str, result: dict):
+        # Compare the original cover (if still selected) with the stego file...
+        cover = self.cover_path.get()
+        if cover and Path(cover).exists():
+            self._thumb(self.verify_preview_frame, "Original cover", cover)
+        self._thumb(self.verify_preview_frame, "Stego (being verified)", stego_path)
+        # ...then show the recovered hidden message underneath.
+        self._show_recovered_message(self.verify_preview_frame, result)
 
 
 class AudioTab(CoverTab):
     cover_type = "audio"
     file_types = [("WAV audio", "*.wav"), ("All files", "*.*")]
 
-    def capacity_report(self, path, lsb_depth):
-        return audio_stego.capacity_report(path, lsb_depth)
+    def capacity_report(self, path, lsb_depth, team_id):
+        return audio_stego.capacity_report(path, lsb_depth, team_id)
 
     def embed(self, *args, **kwargs):
         return audio_stego.embed_audio(*args, **kwargs)
@@ -354,11 +453,11 @@ class AudioTab(CoverTab):
         return audio_stego.extract_and_verify_audio(*args, **kwargs)
 
     def tamper(self, path: str) -> str:
+        """Flip the last 20 bytes of frame data - safely past the header and
+        (for a normal demo file) the payload region."""
         with wave.open(path, "rb") as wf:
             params = wf.getparams()
             raw = bytearray(wf.readframes(params.nframes))
-        # flip bytes in the last 20 bytes of the file, far from the header
-        # margin/derived payload region for a typical demo file.
         for i in range(1, 21):
             raw[-i] ^= 0xFF
         out_path = str(Path(path).with_name(Path(path).stem + "_tampered" + Path(path).suffix))
@@ -367,31 +466,44 @@ class AudioTab(CoverTab):
             wf.writeframes(bytes(raw))
         return out_path
 
-    def _show_preview(self, before_path: str, after_path: str):
-        super()._show_preview(before_path, after_path)
+    # ---- previews ----------------------------------------------------
+    def _audio_column(self, parent, label_text: str, path: str):
+        """One labelled column: format summary + a Play button."""
+        col = ttk.Frame(parent)
+        col.pack(side=LEFT, padx=8)
         try:
-            for label_text, p in (("Original", before_path), ("Stego", after_path)):
-                with wave.open(p, "rb") as wf:
-                    params = wf.getparams()
-                col = ttk.Frame(self.preview_frame)
-                col.pack(side=LEFT, padx=8)
-                ttk.Label(
-                    col,
-                    text=f"{label_text}\n{params.nchannels}ch {params.sampwidth*8}-bit "
-                         f"{params.framerate}Hz\n{params.nframes/params.framerate:.2f}s",
-                ).pack()
-                play_btn = ttk.Button(col, text="Play", command=lambda p=p: self._play(p))
-                play_btn.pack()
-        except Exception:
-            pass
+            with wave.open(path, "rb") as wf:
+                p = wf.getparams()
+            summary = (f"{label_text}\n{p.nchannels}ch {p.sampwidth * 8}-bit "
+                       f"{p.framerate}Hz\n{p.nframes / p.framerate:.2f}s")
+        except Exception as exc:
+            summary = f"{label_text}\n(info failed: {exc})"
+        ttk.Label(col, text=summary).pack()
+        ttk.Button(col, text="Play", command=lambda: self._play(path)).pack()
+
+    def _show_cover_preview(self, path: str):
+        self._audio_column(self.preview_frame, "Cover (before encoding)", path)
+
+    def _show_pair_preview(self, frame, left_path, right_path, labels):
+        self._audio_column(frame, labels[0], left_path)
+        self._audio_column(frame, labels[1], right_path)
+
+    def _show_verify_preview(self, stego_path: str, result: dict):
+        cover = self.cover_path.get()
+        if cover and Path(cover).exists():
+            self._audio_column(self.verify_preview_frame, "Original cover", cover)
+        self._audio_column(self.verify_preview_frame, "Stego (being verified)", stego_path)
+        self._show_recovered_message(self.verify_preview_frame, result)
 
     def _play(self, path: str):
+        """Play a WAV via Windows' built-in winsound (async so the UI stays live)."""
         try:
             import winsound
             winsound.PlaySound(path, winsound.SND_FILENAME | winsound.SND_ASYNC)
         except Exception as exc:
-            messagebox.showinfo("Playback unavailable", f"Could not play audio automatically: {exc}\n"
-                                                          f"Open the file manually instead:\n{path}")
+            messagebox.showinfo("Playback unavailable",
+                                f"Could not play audio automatically: {exc}\n"
+                                f"Open the file manually instead:\n{path}")
 
 
 def main():
@@ -402,11 +514,8 @@ def main():
 
     notebook = ttk.Notebook(root)
     notebook.pack(fill=BOTH, expand=True)
-
-    image_tab = ImageTab(notebook)
-    audio_tab = AudioTab(notebook)
-    notebook.add(image_tab, text="Image")
-    notebook.add(audio_tab, text="Audio")
+    notebook.add(ImageTab(notebook), text="Image")
+    notebook.add(AudioTab(notebook), text="Audio")
 
     root.mainloop()
 

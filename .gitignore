@@ -1,0 +1,20 @@
+# Python bytecode / caches
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Editor / tooling
+.claude/
+.vscode/
+.idea/
+
+# smoke_test.py scratch outputs (NOT graded evidence -- see run_demo_cases.py)
+samples/protected/sample_image_stego.png
+samples/protected/sample_image_stego2.png
+samples/protected/sample_image_stego2_tampered.png
+samples/protected/sample_audio_stego.wav

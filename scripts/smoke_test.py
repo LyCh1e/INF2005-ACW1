@@ -1,5 +1,15 @@
-"""Quick internal sanity check of the embed/extract/verify round trip (not the
-full graded demo cases -- see scripts/run_demo_cases.py for those)."""
+"""
+smoke_test.py
+-------------
+A fast internal sanity check of the embed -> extract -> verify round trip
+for both cover objects, plus the wrong-key and tampered cases.
+
+This is a developer convenience, NOT the graded evidence - for that, see
+scripts/run_demo_cases.py.  If this script prints "ALL SMOKE TESTS PASSED"
+the core pipeline is healthy.
+
+Run:  python scripts/smoke_test.py
+"""
 
 import sys
 from pathlib import Path
@@ -10,13 +20,17 @@ sys.path.insert(0, str(ROOT / "src"))
 import crypto_utils  # noqa: E402
 import image_stego  # noqa: E402
 import audio_stego  # noqa: E402
+import payload as payload_mod  # noqa: E402
 
 PRIV = ROOT / "keys" / "private_key.pem"
 PUB = ROOT / "keys" / "public_key.pem"
 SECRET_KEY = b"team-shared-secret-demo-key"
+TEAM_ID = payload_mod.TEAM_ID_DEFAULT
 
 
 def test_image():
+    """Protect and then verify a PNG - expect the Authentic verdict and the
+    exact message back."""
     priv = crypto_utils.load_private_key(PRIV)
     pub = crypto_utils.load_public_key(PUB)
     src = ROOT / "samples" / "originals" / "sample_image.png"
@@ -25,7 +39,7 @@ def test_image():
 
     stats = image_stego.embed_image(
         str(src), str(out), secret_key=SECRET_KEY, private_key=priv,
-        message="hello from image stego test", lsb_depth=2, media_id="img-test-1", team_id="Px-x",
+        message="hello from image stego test", lsb_depth=2, media_id="img-test-1", team_id=TEAM_ID,
     )
     print("embed stats:", {k: v for k, v in stats.items() if k != "payload"})
 
@@ -37,6 +51,7 @@ def test_image():
 
 
 def test_audio():
+    """Same round trip for a WAV."""
     priv = crypto_utils.load_private_key(PRIV)
     pub = crypto_utils.load_public_key(PUB)
     src = ROOT / "samples" / "originals" / "sample_audio.wav"
@@ -45,7 +60,7 @@ def test_audio():
 
     stats = audio_stego.embed_audio(
         str(src), str(out), secret_key=SECRET_KEY, private_key=priv,
-        message="hello from audio stego test", lsb_depth=3, media_id="aud-test-1", team_id="Px-x",
+        message="hello from audio stego test", lsb_depth=3, media_id="aud-test-1", team_id=TEAM_ID,
     )
     print("embed stats:", {k: v for k, v in stats.items() if k != "payload"})
 
@@ -57,21 +72,23 @@ def test_audio():
 
 
 def test_tamper_and_wrong_key():
+    """A wrong secret key must give 'Cannot Verify'; editing a pixel outside
+    the hidden region must give 'Tampered'."""
     priv = crypto_utils.load_private_key(PRIV)
     pub = crypto_utils.load_public_key(PUB)
     src = ROOT / "samples" / "originals" / "sample_image.png"
     out = ROOT / "samples" / "protected" / "sample_image_stego2.png"
     image_stego.embed_image(
         str(src), str(out), secret_key=SECRET_KEY, private_key=priv,
-        message="tamper test", lsb_depth=1, media_id="img-tamper-1", team_id="Px-x",
+        message="tamper test", lsb_depth=1, media_id="img-tamper-1", team_id=TEAM_ID,
     )
 
-    # wrong secret key -> Cannot Verify
+    # Wrong secret key -> the locator header will not authenticate.
     result = image_stego.extract_and_verify_image(str(out), secret_key=b"wrong-key", public_key=pub)
     print("wrong key verdict:", result["verdict"])
     assert result["verdict"] == "Cannot Verify"
 
-    # tamper a pixel far from header/capsule region -> Tampered
+    # Flip a pixel far from the header / capsule region -> cover hash mismatch.
     from PIL import Image
     img = Image.open(out)
     img.load()

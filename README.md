@@ -1,6 +1,6 @@
 # INF2005 ACW1 -- Steganographic Image and Audio Integrity Verification with Digital Signature-Based Authentication
 
-Team: **Px-x** *(replace with your actual team number everywhere it appears -- see [Renaming for submission](#renaming-for-submission))*
+Team: **P6-6**
 
 A GUI-based (Tkinter) tool that protects PNG images and WAV/PCM audio files by hiding
 a signed verification payload inside them (LSB replacement steganography), and
@@ -30,8 +30,8 @@ python scripts/run_demo_cases.py
 `scripts/run_demo_cases.py` writes every stego/tampered file used as evidence into
 `samples/protected/`, `samples/tampered/` and `samples/protected/received/`, and
 writes a full pass/fail report to `test_evidence/demo_report.md` (and `.json`).
-On the reference machine it produces **29/29 PASS** across every required
-verdict category.
+On the reference machine it produces **30/30 PASS** across every required
+verdict category, for both the image and the audio workflow.
 
 A quick internal sanity check (not the graded evidence) is also available:
 `python scripts/smoke_test.py`.
@@ -88,7 +88,7 @@ A compact JSON payload is created for every protected file:
   "cover_hash": "<sha256 hex of the cover object's non-stego-bearing content>",
   "lsb_depth": 2,
   "message": "<the confidentiality/integrity-protected message>",
-  "metadata": { "team_id": "Px-x", "tool": "INF2005-ACW1-StegoVerify" }
+  "metadata": { "team_id": "P6-6", "tool": "INF2005-ACW1-StegoVerify" }
 }
 ```
 
@@ -199,8 +199,8 @@ across both image and audio.
 
 ## 4. Positive and negative test cases (FR11)
 
-Generated automatically by `scripts/run_demo_cases.py` (29 cases total,
-29/29 passing on the reference run):
+Generated automatically by `scripts/run_demo_cases.py` (30 cases total,
+30/30 passing on the reference run):
 
 * **Capacity check** (image + audio): a deliberately oversized message is
   rejected with a clear `CapacityError` *before* any data is written,
@@ -215,10 +215,11 @@ Generated automatically by `scripts/run_demo_cases.py` (29 cases total,
   party B downloads it to their folder") and verified from that copy,
   demonstrating end-to-end integrity/signature verification independent of
   the original embedding session.
-* **Negative cases** (>=1 per cover object, 4-5 each in practice): tampered
+* **Negative cases** (>=1 per cover object, 5 each in practice): tampered
   cover content, wrong shared secret key, an untrusted signer's private
-  key, a plain unprotected file, and (image only) an engineered
-  out-of-range start offset.
+  key, a plain unprotected file, and an engineered out-of-range start
+  offset -- so every one of the six verdict categories is demonstrated on
+  both the image and the audio cover object.
 * **Selectable LSB matrix**: every LSB depth from 1 to 8 is exercised on the
   image workflow (and a representative subset on audio), each round-tripping
   to `Authentic`.
@@ -297,12 +298,15 @@ To reproduce verification independently: load `public_key.pem` with
 
 ---
 
-## 8. Renaming for submission
+## 8. Team number
 
-Replace every `Px-x` placeholder (this README, `payload.py`'s
-`TEAM_ID_DEFAULT`, the GUI's default Team ID field, the declaration of
-originality and demo plan documents) with your actual team number, e.g.
-`P1-4`, before submission.
+The team number is **P6-6**. In code it is defined once, in
+`src/payload.py` as `TEAM_ID_DEFAULT`; the GUI and the demo scripts import
+that value, so there is a single place to change it if the team number ever
+changes. The GUI's "Team ID" field is still editable per run.
+
+The declaration of originality and demo plan documents (separate
+team-authored submissions) must also carry `P6-6`.
 
 ---
 

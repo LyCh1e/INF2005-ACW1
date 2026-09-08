@@ -1,6 +1,6 @@
 # INF2005 ACW1 -- Demo Test Evidence Report
 
-Total cases: 29  |  Passed: 29  |  Failed: 0
+Total cases: 30  |  Passed: 30  |  Failed: 0
 
 | Case ID | Cover | Category | Description | Verdict | Expected | Result |
 |---|---|---|---|---|---|---|
@@ -29,6 +29,7 @@ Total cases: 29  |  Passed: 29  |  Failed: 0
 | AUD-NEG-02 | audio | negative | Verifier supplies the wrong shared secret key | Cannot Verify | Cannot Verify | PASS |
 | AUD-NEG-03 | audio | negative | File signed with an untrusted private key | Signature Invalid | Signature Invalid | PASS |
 | AUD-NEG-04 | audio | negative | Original cover object with no embedded payload | Payload Missing | Payload Missing | PASS |
+| AUD-NEG-05 | audio | negative | Header engineered to advertise an out-of-range start offset | Wrong Start Location | Wrong Start Location | PASS |
 | AUD-LSB-1 | audio | lsb-matrix | Selectable LSB depth = 1 | Authentic | Authentic | PASS |
 | AUD-LSB-3 | audio | lsb-matrix | Selectable LSB depth = 3 | Authentic | Authentic | PASS |
 | AUD-LSB-6 | audio | lsb-matrix | Selectable LSB depth = 6 | Authentic | Authentic | PASS |

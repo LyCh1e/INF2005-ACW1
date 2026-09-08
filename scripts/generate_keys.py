@@ -1,10 +1,15 @@
 """
-Generate the RSA key pair used to sign / verify verification payloads.
+generate_keys.py
+----------------
+One-time generation of the RSA key pair that signs / verifies verification
+payloads (FR4).
 
 Run once:  python scripts/generate_keys.py
 
-Produces keys/private_key.pem (KEEP SECRET, only for demo use) and
-keys/public_key.pem (safe to distribute / submit).
+Produces:
+  keys/private_key.pem  - SIGNS payloads. Keep secret; generated only for
+                          this assignment demo, never reuse it elsewhere.
+  keys/public_key.pem   - VERIFIES signatures. Safe to distribute / submit.
 """
 
 import sys
@@ -20,11 +25,14 @@ PUBLIC_KEY_PATH = ROOT / "keys" / "public_key.pem"
 
 
 def main():
+    # Never silently overwrite existing keys - re-keying invalidates every
+    # stego file already produced with the old key.
     if PRIVATE_KEY_PATH.exists() or PUBLIC_KEY_PATH.exists():
         answer = input(f"Key files already exist under {ROOT / 'keys'}. Overwrite? [y/N] ")
         if answer.strip().lower() != "y":
             print("Aborted.")
             return
+
     crypto_utils.generate_keypair(PRIVATE_KEY_PATH, PUBLIC_KEY_PATH)
     print(f"Generated:\n  {PRIVATE_KEY_PATH}\n  {PUBLIC_KEY_PATH}")
     print("\nNOTE: private_key.pem is generated purely for this assignment demo.")

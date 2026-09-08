@@ -250,6 +250,16 @@
     "extra": {}
   },
   {
+    "case_id": "AUD-NEG-05",
+    "cover_type": "audio",
+    "category": "negative",
+    "description": "Header engineered to advertise an out-of-range start offset",
+    "verdict": "Wrong Start Location",
+    "expected": "Wrong Start Location",
+    "pass": true,
+    "extra": {}
+  },
+  {
     "case_id": "AUD-LSB-1",
     "cover_type": "audio",
     "category": "lsb-matrix",
