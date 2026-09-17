@@ -28,7 +28,7 @@ import sys
 import wave
 from pathlib import Path
 from tkinter import (
-    BOTH, END, LEFT, X, StringVar, IntVar, Text, Tk, ttk, filedialog, messagebox,
+    BOTH, END, LEFT, X, Canvas, StringVar, IntVar, Text, Tk, ttk, filedialog, messagebox,
 )
 
 # Make `src/` importable whether the script is run from the repo root or from src/.
@@ -82,7 +82,7 @@ class CoverTab(ttk.Frame):
     file_types: list[tuple[str, str]] = []
 
     def __init__(self, parent):
-        super().__init__(parent, padding=10)
+        super().__init__(parent, padding=0)
 
         # Keeps PhotoImage objects alive - Tk only holds a weak reference,
         # so without this thumbnails get garbage-collected and go blank.
@@ -98,17 +98,48 @@ class CoverTab(ttk.Frame):
         self.custom_message = StringVar(value=f"Custom confidential note from Team {DEFAULT_TEAM_ID}.")
         self.team_id = StringVar(value=DEFAULT_TEAM_ID)
 
+        # --- Scrollable container -------------------------------------
+        # A Canvas holds an inner `self.content` frame plus a vertical
+        # scrollbar, so the Verify/Tamper sections stay reachable instead of
+        # being clipped off-screen once the image/audio previews expand the
+        # tab past the window height.
+        canvas = Canvas(self, highlightthickness=0)
+        vscroll = ttk.Scrollbar(self, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=vscroll.set)
+        vscroll.pack(side="right", fill="y")
+        canvas.pack(side="left", fill=BOTH, expand=True)
+
+        self.content = ttk.Frame(canvas, padding=10)
+        content_window = canvas.create_window((0, 0), window=self.content, anchor="nw")
+
+        # Keep the scrollregion in sync with the content size, and make the
+        # content frame track the canvas width so it fills horizontally.
+        self.content.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all")),
+        )
+        canvas.bind(
+            "<Configure>",
+            lambda e: canvas.itemconfigure(content_window, width=e.width),
+        )
+
+        # Mouse-wheel scrolling while the pointer is over this tab.
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        canvas.bind("<Enter>", lambda e: canvas.bind_all("<MouseWheel>", _on_mousewheel))
+        canvas.bind("<Leave>", lambda e: canvas.unbind_all("<MouseWheel>"))
+
         # --- Build the three sections, separated by horizontal rules ---
         self._build_protect_section()
-        ttk.Separator(self, orient="horizontal").pack(fill=X, pady=8)
+        ttk.Separator(self.content, orient="horizontal").pack(fill=X, pady=8)
         self._build_verify_section()
-        ttk.Separator(self, orient="horizontal").pack(fill=X, pady=8)
+        ttk.Separator(self.content, orient="horizontal").pack(fill=X, pady=8)
         self._build_tamper_section()
 
     # ==== UI construction ==============================================
     def _build_protect_section(self):
         """Section 1: pick a cover, a message, options; capacity check + Protect."""
-        box = ttk.LabelFrame(self, text=f"1) Protect a {self.cover_type} file", padding=8)
+        box = ttk.LabelFrame(self.content, text=f"1) Protect a {self.cover_type} file", padding=8)
         box.pack(fill=X)
 
         # Row: choose cover file.
@@ -158,7 +189,7 @@ class CoverTab(ttk.Frame):
 
     def _build_verify_section(self):
         """Section 2: pick a file + secret key, Verify, show verdict + preview."""
-        box = ttk.LabelFrame(self, text=f"2) Verify a {self.cover_type} file", padding=8)
+        box = ttk.LabelFrame(self.content, text=f"2) Verify a {self.cover_type} file", padding=8)
         box.pack(fill=X)
 
         row = ttk.Frame(box)
@@ -182,7 +213,7 @@ class CoverTab(ttk.Frame):
 
     def _build_tamper_section(self):
         """Section 3: one-click helper to produce a tampered negative case."""
-        box = ttk.LabelFrame(self, text="3) Simulate tampering (negative test helper)", padding=8)
+        box = ttk.LabelFrame(self.content, text="3) Simulate tampering (negative test helper)", padding=8)
         box.pack(fill=X)
         row = ttk.Frame(box)
         row.pack(fill=X, pady=2)
