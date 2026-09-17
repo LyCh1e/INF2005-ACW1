@@ -84,6 +84,10 @@ class CoverTab(ttk.Frame):
     def __init__(self, parent):
         super().__init__(parent, padding=10)
 
+        # Keeps PhotoImage objects alive - Tk only holds a weak reference,
+        # so without this thumbnails get garbage-collected and go blank.
+        self._photo_refs = []
+
         # --- Tk variables bound to the input widgets ---
         self.cover_path = StringVar()      # cover file chosen in section 1
         self.stego_path = StringVar()      # stego file produced by Protect
@@ -346,7 +350,8 @@ class CoverTab(ttk.Frame):
         text.configure(state="disabled")
         text.pack(fill=X)
 
-    def _show_pair_preview(self, frame: ttk.Frame, left_path: str, right_path: str, labels):
+    def _show_pair_preview(self, frame: ttk.Frame, left_path: str, right_path: str,
+                            labels: "tuple[str, str]"):
         """Default 'two things side by side' preview - subclasses override
         with real thumbnails / audio players."""
         for label_text, p in zip(labels, (left_path, right_path)):
@@ -393,13 +398,16 @@ class ImageTab(CoverTab):
         the header margin and (for a normal demo file) the payload region -
         so the change is caught by the cover hash, not the signature."""
         img = Image.open(path)
-        img.load()
+        if img.mode not in ("RGB", "RGBA"):
+            img = img.convert("RGB")
         px = img.load()
+        assert px is not None
         w, h = img.size
         for dx in range(5):
             for dy in range(5):
                 x, y = w - 1 - dx, h - 1 - dy
                 pixel = px[x, y]
+                assert isinstance(pixel, tuple)
                 inverted = tuple(255 - c for c in pixel[:3]) + tuple(pixel[3:])
                 px[x, y] = inverted
         out_path = str(Path(path).with_name(Path(path).stem + "_tampered" + Path(path).suffix))
@@ -417,7 +425,7 @@ class ImageTab(CoverTab):
             img.thumbnail((220, 220))
             photo = ImageTk.PhotoImage(img)
             lbl = ttk.Label(col, image=photo)
-            lbl.image = photo  # keep a reference or Tk garbage-collects it
+            self._photo_refs.append(photo)  # keep a reference or Tk garbage-collects it
             lbl.pack()
         except Exception as exc:
             ttk.Label(col, text=f"(preview failed: {exc})").pack()
@@ -425,7 +433,7 @@ class ImageTab(CoverTab):
     def _show_cover_preview(self, path: str):
         self._thumb(self.preview_frame, "Cover (before encoding)", path)
 
-    def _show_pair_preview(self, frame, left_path, right_path, labels):
+    def _show_pair_preview(self, frame, left_path, right_path, labels: "tuple[str, str]"):
         self._thumb(frame, labels[0], left_path)
         self._thumb(frame, labels[1], right_path)
 
@@ -484,7 +492,7 @@ class AudioTab(CoverTab):
     def _show_cover_preview(self, path: str):
         self._audio_column(self.preview_frame, "Cover (before encoding)", path)
 
-    def _show_pair_preview(self, frame, left_path, right_path, labels):
+    def _show_pair_preview(self, frame, left_path, right_path, labels: "tuple[str, str]"):
         self._audio_column(frame, labels[0], left_path)
         self._audio_column(frame, labels[1], right_path)
 
