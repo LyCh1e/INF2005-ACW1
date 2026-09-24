@@ -178,9 +178,10 @@ def derive_start_offset(secret_key: bytes, salt: bytes, min_offset: int, capacit
       1. span = how many valid positions there are.
       2. Take 8 keystream bytes derived from (secret_key, salt + "OFFSET").
       3. Interpret them as a big integer and reduce it modulo `span`.
-    Without the secret key an attacker cannot reproduce step 2, so the true
-    offset is one of `span` equally likely positions (hundreds of thousands
-    to millions for a normal demo file).
+    Without the secret key an attacker cannot compute step 2, so the offset
+    is not a fixed, predictable spot. This is obscurity, not secrecy of the
+    data: the capsule can still be found by scanning; the RSA signature is
+    what guarantees authenticity.
     """
     if capacity <= min_offset:
         raise ValueError("Cover object has no usable capacity beyond the reserved header region")
