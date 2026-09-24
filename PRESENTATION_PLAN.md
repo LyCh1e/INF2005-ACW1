@@ -145,7 +145,6 @@ Same verdicts on audio: **Tampered**, **Cannot Verify** (wrong key), **Payload M
 - [ ] Upload the demo plan (§4 above) to xSite.
 - [ ] Declaration of Originality signed by **all six**. The current `Px-x_DeclarationOfOriginality.docx` still has blank emails/student IDs for five members and an empty contribution-distribution section.
 - [ ] Contribution/distribution statement (percentages sum to 100%) agreed by everyone.
-- [ ] Spec p2: email `khengleong.tan@singaporetech.edu.sg`, subject **"ACW1 used in genAI query"**, with device/source details — the README says Claude was used, so this applies.
 
 **Environment (do a full dry-run on the demo machine)**
 - [ ] `pip install -r requirements.txt`; keys and samples exist (`generate_keys.py`, `generate_samples.py`); `run_demo_cases.py` shows 30/30.
