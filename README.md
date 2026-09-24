@@ -165,14 +165,7 @@ how the decoder recovers it, and how it is protected against guessing.
 5. The verifier, who knows `secret_key`, reads the small fixed-position
    header, checks the HMAC tag, decrypts the offset, and jumps straight to
    the correct location -- no brute-force search is needed by a legitimate
-   party, while an outside attacker's search space for the true offset is
-   the entire remaining capacity of the cover object (hundreds of thousands
-   to millions of candidate byte positions for a typical demo file), which
-   is:
-   * derived from the secret key via HMAC (a moving target -- different for
-     every file, since the salt changes every time), and
-   * gated behind the HMAC tag, which fails long before an attacker could
-     even test a guessed offset.
+   party.
 
 This is deliberately **not** a fixed offset and **not** a location that can
 be recovered from public metadata alone -- both are explicitly called out
