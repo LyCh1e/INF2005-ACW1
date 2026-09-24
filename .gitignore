@@ -18,3 +18,4 @@ samples/protected/sample_image_stego.png
 samples/protected/sample_image_stego2.png
 samples/protected/sample_image_stego2_tampered.png
 samples/protected/sample_audio_stego.wav
+.DS_Store
