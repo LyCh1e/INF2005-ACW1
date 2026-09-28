@@ -1,8 +1,6 @@
-# Payload Example: security design of a protected file
+# Payload Example: what we hide inside a protected file
 
-Real values extracted from `samples/protected/image_case_positive_short_lsb1.png`
-(short Learning Outcome message, LSB depth 1, verdict **Authentic**).
-Produced by reading the file back with the project's own `format_spec`, `bitops` and `crypto_utils` code. Nothing below is invented.
+Every value on this page comes from a real protected image, `samples/protected/image_case_positive_short_lsb1.png`. It holds a short message, uses 1 LSB, and verifies as **Authentic**. We read the values back out of the file with our own code. Nothing is made up.
 
 **The chain:**
 
@@ -13,19 +11,24 @@ Payload JSON (canonical, RSA-PSS signed)
     (offset = salted HMAC mod usable range)
 ```
 
-Where the two hidden regions sit in the cover:
+In plain words:
+1. We write a small **record** about the file and **sign** it, so nobody can fake it.
+2. We pack the record and signature into a **capsule** and hide it at a **secret spot** in the file.
+3. We leave a small **signpost** (the header) near the start. It says where the capsule is, but only someone with the key can read the location.
+
+Where things sit in the image (a "unit" is one colour byte of one pixel):
 
 ```
- pixel-byte units:  0 ... 15 | 16 ................ 279 | ... | 409,504 ............ 414,991 | ... 921,599
-                    untouched | LOCATOR HEADER (33 B)  |     | PAYLOAD CAPSULE (686 B)      |
-                              | fixed spot, 1 LSB      |     | secret offset, 1–8 LSBs      |
+ units:  0 ... 15 | 16 ................ 279 | ... | 409,504 ............ 414,991 | ... 921,599
+         untouched | SIGNPOST (header, 33 B) |     | CAPSULE (686 B)              |
+                   | always here, 1 LSB      |     | secret spot, 1–8 LSBs        |
 ```
 
 ---
 
-## 1. Payload JSON (canonical, RSA-PSS signed)
+## 1. Payload JSON: the signed record
 
-This is the object that gets **signed**. It is pretty-printed here so it's easier to read:
+This is the record we hide. It describes the file and carries the message:
 
 ```json
 {
@@ -43,42 +46,46 @@ This is the object that gets **signed**. It is pretty-printed here so it's easie
 }
 ```
 
-| Field | Example value | Purpose |
-|---|---|---|
-| `media_id` | `img-pos-short` | Which media this record belongs to |
-| `cover_type` | `image` | `image` or `audio` |
-| `timestamp` | `2026-09-08T13:09:28Z` | UTC time of protection |
-| `nonce` | `5fbcb286…9e64` (128-bit random) | Makes every payload unique, even with identical settings |
-| `cover_hash` | `d9e04db9…f957fa` (SHA-256) | Hash of the cover **with the header + capsule regions blanked to 0x00**. Detects edits to the visible pixels |
-| `lsb_depth` | `1` | LSBs per unit used for the capsule |
-| `message` | the Learning Outcome text | The confidential message |
-| `metadata` | team id + tool name | Provenance |
+| Field | What it's for |
+|---|---|
+| `media_id` | A name for this file |
+| `cover_type` | Whether it's an image or audio |
+| `timestamp` | When we protected it |
+| `nonce` | A random number, so no two records are ever the same |
+| `cover_hash` | A fingerprint of the picture itself. If anyone edits the picture, the fingerprint won't match any more |
+| `lsb_depth` | How many bits per unit the capsule uses (1 here) |
+| `message` | The secret message |
+| `metadata` | Our team ID and tool name |
 
-**Canonical form.** What is actually embedded has sorted keys, no whitespace and UTF-8 encoding, so the signer and the verifier hash byte-identical input (`payload.serialize_payload`). It is 420 bytes:
+The fingerprint (`cover_hash`) is taken with our hidden areas blanked out first. That's because hiding the data changes those areas, and we don't want that change to count as tampering.
+
+**Canonical form.** Before signing, we write the record the same way every time: keys in alphabetical order and no spaces. It comes to 420 bytes. This matters because the signature only checks out if the sender and the checker hash exactly the same bytes.
 
 ```
 {"cover_hash":"d9e04db94bd0df040640cad15c24fc8d9a22db340834559e08b1d720a7f957fa","cover_type":"image","lsb_depth":1,"media_id":"img-pos-short","message":"Use digital signatures to verify that a payload or file record was issued by a legitimate signer and has not been altered.","metadata":{"team_id":"P6-6","tool":"INF2005-ACW1-StegoVerify"},"nonce":"5fbcb286c31c463c9b62ad0a6d2c9e64","timestamp":"2026-09-08T13:09:28Z"}
 ```
 
 **Signing.**
-- SHA-256 of those 420 bytes: `066808fdfacfa79627680479acd99d3d2595793e6b2bb2d46775d468db876f4b`
-- That digest is signed with the team's **RSA-2048 private key using PSS padding**, which gives a 256-byte signature.
+- We hash those 420 bytes with SHA-256 and get `066808fdfacfa79627680479acd99d3d2595793e6b2bb2d46775d468db876f4b`.
+- We sign that hash with our **private key** (RSA-2048, PSS), which gives a 256-byte signature. Anyone with our public key can check it, but only we can create it.
 
 ---
 
-## 2. Capsule: `payload_len | payload | sig_len | signature` at a secret offset (1–8 LSBs)
+## 2. Capsule: the package hidden at the secret spot
 
-`format_spec.pack_capsule` wraps the payload and signature into one block of **686 bytes**:
+The record and its signature are packed together into one 686-byte block:
 
-| Bytes | Field | Value in this file |
+| Bytes | Part | Value in this file |
 |---|---|---|
-| 4 | Magic | `50 4C 44 31` = `"PLD1"` |
-| 4 | `payload_len` (big-endian) | `00 00 01 A4` = **420** |
-| 420 | `payload` (canonical JSON above) | `7B 22 63 6F …` = `{"co…` |
-| 2 | `sig_len` (big-endian) | `01 00` = **256** |
-| 256 | `signature` (RSA-PSS) | `14df3c09 3aa8e311 b82742a3 … 72f5ef96 9e` |
+| 4 | Marker | `PLD1` ("this is a capsule") |
+| 4 | `payload_len` | **420**, the size of the record |
+| 420 | `payload` | the record above |
+| 2 | `sig_len` | **256**, the size of the signature |
+| 256 | `signature` | `14df3c09 3aa8e311 b82742a3 … 72f5ef96 9e` |
 
-4 + 4 + 420 + 2 + 256 = **686 bytes**. The capsule is written with the user-selected LSB depth (1 here), so it covers 686 × 8 / 1 = **5,488 pixel bytes**, starting at the secret unit **409,504**.
+4 + 4 + 420 + 2 + 256 = **686 bytes**.
+
+The user picks how many of the lowest bits (1 to 8) in each unit to overwrite. Using more bits fits more data but changes the picture more. Here we use 1 bit per unit, so the 686 bytes (5,488 bits) take up **5,488 units**, starting at the secret spot, unit **409,504**.
 
 Full signature (hex):
 
@@ -95,27 +102,27 @@ cade03e513fd7dff6ff09bcb88b2537aeab9d8f7ae08a847412d5a72f5ef969e
 
 ---
 
-## 3. Locator header: 33 B, HMAC-tagged, at unit 16
+## 3. Locator header: the signpost at unit 16
 
-The header tells the decoder where the capsule is. It is always written at unit 16 (never the top-left pixel) and always at 1 LSB, so it can be read before the capsule's LSB depth is known. Raw bytes read from the file:
+The checker needs to know where the capsule is. The header tells it. The header is always in the same place (unit 16, not the very first pixel) and always uses 1 bit per unit, so the checker can read it before it knows anything else.
+
+Raw bytes from the file:
 
 ```
-53 56 48 31 | 01 | 6a 0c ee 54 7b 77 9b ad | be 3d 30 44 9a 54 e3 de | 00 00 02 ae | 16 97 02 d2 8b a4 85 b9
-   magic      lsb          salt                  encrypted offset          capsule len       HMAC tag
+53 56 48 31 |  01  | 6a 0c ee 54 7b 77 9b ad | be 3d 30 44 9a 54 e3 de |   00 00 02 ae   | 16 97 02 d2 8b a4 85 b9
+   magic      lsb          salt                  encrypted offset          capsule len            HMAC tag
 ```
 
-| Bytes | Field | Value | Meaning |
+| Bytes | Part | Value | What it means |
 |---|---|---|---|
-| 4 | Magic | `SVH1` | "This file was protected by our tool". If it is absent the verdict is **Payload Missing** |
-| 1 | LSB depth | `01` | The capsule uses 1 LSB |
-| 8 | Salt | `6a0cee547b779bad` | Fresh random value for each file, so the offset changes every time |
-| 8 | Encrypted offset | `be3d30449a54e3de` | The real offset XORed with an HMAC keystream. Unreadable without the secret |
-| 4 | Capsule length | `00 00 02 AE` = 686 | How many bytes to read at the offset |
-| 8 | HMAC tag | `169702d28ba485b9` | Authenticates lsb‖salt‖enc_offset‖len. A wrong key or an edited header gives **Cannot Verify** |
+| 4 | Magic | `SVH1` | "Our tool protected this file." If it's missing, the verdict is **Payload Missing** |
+| 1 | LSB depth | `1` | The capsule uses 1 bit per unit |
+| 8 | Salt | `6a0cee547b779bad` | A random value, new for every file |
+| 8 | Encrypted offset | `be3d30449a54e3de` | Where the capsule is, scrambled so only the key holder can read it |
+| 4 | Capsule length | 686 | How many bytes to read |
+| 8 | HMAC tag | `169702d28ba485b9` | A seal made with the key. A wrong key or any change to the header breaks it, and the verdict is **Cannot Verify** |
 
-### Key-derived start offset (salted HMAC mod usable range)
-
-`crypto_utils.derive_start_offset` and `encrypt_offset`:
+### Key-derived start offset: how the secret spot is picked
 
 ```
 usable range = [280, len(carrier) − units_needed + 1)       # after the header, and the whole capsule still fits
@@ -123,11 +130,13 @@ offset       = 280 + HMAC-SHA256(secret_key, salt ‖ "OFFSET") mod span
 enc_offset   = offset XOR HMAC-SHA256(secret_key, salt ‖ "ENC")[:8]
 ```
 
-- **Chosen by:** the shared secret plus a fresh salt for each file. The same cover protected twice lands at different offsets.
-- **Found by:** the decoder reads the header, checks the HMAC tag, and then decrypts the offset. With the demo secret `team-shared-secret-demo-key`, `be3d30449a54e3de` decrypts to **409,504**, which is where the capsule above begins.
-- **Secured by:** the offset is only stored encrypted, and the tag stops anyone from changing the header. A decrypted offset outside the usable range gives **Wrong Start Location**.
-- **Limit:** the magic, LSB depth and capsule length are stored in the clear, and the capsule starts with `PLD1`. Someone who knows the format could still scan the cover to find it. Hiding the location beats the "check the corner" attack, and the RSA signature is what actually guarantees authenticity.
+In plain words: we mix our secret key with the salt to get a big number, and cut it down to fit the space available. That gives the spot. Then we mix the key and salt a second way to scramble the spot before writing it into the header.
+
+- **Chosen by:** our shared secret key plus a random salt. Because the salt is new each time, protecting the same picture twice puts the capsule in two different places.
+- **Found by:** the checker reads the header, checks the seal, and unscrambles the spot with the same key. With our demo key `team-shared-secret-demo-key`, `be3d30449a54e3de` unscrambles to **409,504**, exactly where the capsule starts.
+- **Secured by:** the spot is never written in plain form, and the seal stops anyone from changing the header. If the unscrambled spot falls outside the allowed range, the verdict is **Wrong Start Location**.
+- **Limit:** some header fields are readable, and every capsule starts with `PLD1`. Someone who knows our format could still search the whole file for it. So the secret spot stops "just look in the corner", but it isn't what proves the file is genuine. The signature does that.
 
 ---
 
-Audio uses the same design. The only differences are that a "unit" is the low byte of each 16-bit WAV sample instead of a pixel channel byte, and `cover_type` is `"audio"`.
+Audio works exactly the same way. The only difference is that a "unit" is the low byte of each sound sample instead of a colour byte of a pixel, and `cover_type` is `"audio"`.
